@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mes GitHub Pages</title>
+<meta name="description" content="Toutes mes GitHub Pages en ligne, au même endroit.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f7f6f3; --card: #ffffff; --text: #1d1d1b; --muted: #6b6a66;
+    --line: #e4e2dc; --accent: #2f6f4f; --accent-soft: #e5efe9;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #151614; --card: #1e201d; --text: #ecebe7; --muted: #9a9993;
+            --line: #2e302c; --accent: #7cc39b; --accent-soft: #233229; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 16px/1.5 Inter, system-ui, sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 48px 16px 64px; }
+  h1 { font-size: 2rem; margin: 0 0 4px; letter-spacing: -0.02em; }
+  .sub { color: var(--muted); margin: 0 0 28px; }
+  .bar { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+  input, select { font: inherit; padding: 10px 14px; border-radius: 10px;
+         border: 1px solid var(--line); background: var(--card); color: var(--text); }
+  input { flex: 1; min-width: 200px; }
+  input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .count { color: var(--muted); font-size: .9rem; margin-bottom: 12px; }
+  ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+  li { background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+       padding: 16px 18px; display: flex; justify-content: space-between;
+       gap: 16px; align-items: center; transition: border-color .15s; }
+  li:hover { border-color: var(--accent); }
+  .name { font-weight: 600; font-size: 1.05rem; color: var(--text); text-decoration: none; }
+  .name:hover { color: var(--accent); }
+  .desc { color: var(--muted); font-size: .92rem; margin-top: 2px; }
+  .meta { font-family: "JetBrains Mono", monospace; font-size: .78rem; color: var(--muted);
+          margin-top: 6px; word-break: break-all; }
+  .actions { display: flex; gap: 8px; flex-shrink: 0; }
+  .btn { font-size: .85rem; padding: 7px 12px; border-radius: 8px; text-decoration: none;
+         border: 1px solid var(--line); color: var(--text); white-space: nowrap; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: 600; }
+  .btn:hover { border-color: var(--accent); }
+  .msg { padding: 16px; border-radius: 12px; background: var(--accent-soft); }
+  footer { margin-top: 40px; color: var(--muted); font-size: .85rem; }
+  footer a { color: var(--muted); }
+  @media (max-width: 560px) {
+    li { flex-direction: column; align-items: flex-start; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>Mes GitHub Pages</h1>
+  <p class="sub">Toutes mes pages en ligne, retrouvées automatiquement sur GitHub.</p>
+
+  <div class="bar">
+    <input id="q" type="search" placeholder="Rechercher une page…" autofocus>
+    <select id="sort" aria-label="Trier">
+      <option value="pushed">Modifiées récemment</option>
+      <option value="name">Ordre alphabétique</option>
+    </select>
+  </div>
+
+  <div class="count" id="count"></div>
+  <ul id="list"><li class="msg">Chargement…</li></ul>
+
+  <footer>
+    Liste générée en direct depuis l'API GitHub ·
+    <a id="src" href="#">code source</a>
+  </footer>
+</main>
+
+<script>
+// ---- Configuration ---------------------------------------------------------
+// Comptes / organisations dont on liste les GitHub Pages (dépôts publics).
+const OWNERS = ["OlivierCalmels"];
+// Dépôts à masquer (ex. ce hub lui-même).
+const HIDDEN = ["oliviercalmels.github.io"];
+// Liens à ajouter à la main (pages hors GitHub, sites privés, etc.).
+const EXTRA = [
+  // { name: "Mon autre site", url: "https://exemple.com", description: "…" },
+];
+// Liste de secours si l'API GitHub ne répond pas (limite de requêtes atteinte).
+const FALLBACK = [
+  { name: "chessParty", owner: "OlivierCalmels" },
+  { name: "chess_tournament_manager", owner: "OlivierCalmels" },
+  { name: "claude_artefacts_games", owner: "OlivierCalmels" },
+  { name: "edmond-pages", owner: "OlivierCalmels" },
+  { name: "lacuisinedhelena", owner: "OlivierCalmels" },
+];
+// ---------------------------------------------------------------------------
+
+const CACHE_KEY = "gh-pages-hub-v1";
+const CACHE_TTL = 60 * 60 * 1000; // 1 h
+const $ = (id) => document.getElementById(id);
+document.getElementById("src").href = `https://github.com/${OWNERS[0]}/${OWNERS[0]}.github.io`;
+
+function pageUrl(r) {
+  if (r.url) return r.url;
+  if (r.homepage && /^https?:\/\//.test(r.homepage)) return r.homepage;
+  const host = `${r.owner.toLowerCase()}.github.io`;
+  return r.name.toLowerCase() === host ? `https://${host}/` : `https://${host}/${r.name}/`;
+}
+
+async function fetchOwner(owner) {
+  const out = [];
+  for (let page = 1; page < 20; page++) {
+    const res = await fetch(`https://api.github.com/users/${owner}/repos?per_page=100&page=${page}`);
+    if (!res.ok) throw new Error(`GitHub API ${res.status}`);
+    const batch = await res.json();
+    out.push(...batch);
+    if (batch.length < 100) break;
+  }
+  return out.filter((r) => r.has_pages).map((r) => ({
+    name: r.name, owner: r.owner.login, description: r.description,
+    homepage: r.homepage, pushed: r.pushed_at, repo: r.html_url,
+  }));
+}
+
+async function load() {
+  try {
+    const c = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
+    if (c && Date.now() - c.at < CACHE_TTL) return { items: c.items };
+  } catch (e) {}
+  try {
+    const all = (await Promise.all(OWNERS.map(fetchOwner))).flat();
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify({ at: Date.now(), items: all })); } catch (e) {}
+    return { items: all };
+  } catch (err) {
+    try {
+      const c = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
+      if (c) return { items: c.items, stale: true };
+    } catch (e) {}
+    return { items: FALLBACK.map((f) => ({ ...f, repo: `https://github.com/${f.owner}/${f.name}` })), stale: true };
+  }
+}
+
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+
+let ITEMS = [], STALE = false;
+
+function render() {
+  const q = $("q").value.trim().toLowerCase();
+  const sort = $("sort").value;
+  let rows = ITEMS.filter((r) =>
+    !q || `${r.name} ${r.description || ""}`.toLowerCase().includes(q));
+  rows.sort(sort === "name"
+    ? (a, b) => a.name.localeCompare(b.name, "fr", { sensitivity: "base" })
+    : (a, b) => (b.pushed || "").localeCompare(a.pushed || ""));
+
+  $("count").textContent = `${rows.length} page${rows.length > 1 ? "s" : ""}` +
+    (STALE ? " · liste hors ligne (GitHub injoignable)" : "");
+
+  if (!rows.length) { $("list").innerHTML = `<li class="msg">Aucune page ne correspond.</li>`; return; }
+
+  $("list").innerHTML = rows.map((r) => {
+    const url = pageUrl(r);
+    const date = r.pushed ? new Date(r.pushed).toLocaleDateString("fr-FR",
+      { day: "numeric", month: "short", year: "numeric" }) : "";
+    return `<li>
+      <div>
+        <a class="name" href="${esc(url)}" target="_blank" rel="noopener">${esc(r.name)}</a>
+        ${r.description ? `<div class="desc">${esc(r.description)}</div>` : ""}
+        <div class="meta">${esc(url.replace(/^https?:\/\//, ""))}${date ? " · " + date : ""}</div>
+      </div>
+      <div class="actions">
+        <a class="btn primary" href="${esc(url)}" target="_blank" rel="noopener">Ouvrir</a>
+        ${r.repo ? `<a class="btn" href="${esc(r.repo)}" target="_blank" rel="noopener">Dépôt</a>` : ""}
+      </div>
+    </li>`;
+  }).join("");
+}
+
+load().then(({ items, stale }) => {
+  const hidden = HIDDEN.map((h) => h.toLowerCase());
+  ITEMS = items.filter((r) => !hidden.includes(r.name.toLowerCase())).concat(EXTRA);
+  STALE = !!stale;
+  render();
+});
+$("q").addEventListener("input", render);
+$("sort").addEventListener("change", render);
+</script>
+</body>
+</html>
