@@ -23,8 +23,11 @@
   h1 { font-size: 2rem; margin: 0 0 4px; letter-spacing: -0.02em; }
   .sub { color: var(--muted); margin: 0 0 28px; }
   .bar { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
-  input, select { font: inherit; padding: 10px 14px; border-radius: 10px;
+  input, select, button { font: inherit; padding: 10px 14px; border-radius: 10px;
          border: 1px solid var(--line); background: var(--card); color: var(--text); }
+  button { cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button:disabled { opacity: .6; cursor: wait; }
   input { flex: 1; min-width: 200px; }
   input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
   .count { color: var(--muted); font-size: .9rem; margin-bottom: 12px; }
@@ -62,6 +65,7 @@
       <option value="pushed">Modifiées récemment</option>
       <option value="name">Ordre alphabétique</option>
     </select>
+    <button id="refresh" type="button" title="Ignorer le cache et recharger depuis GitHub">↻ Actualiser</button>
   </div>
 
   <div class="count" id="count"></div>
@@ -120,8 +124,8 @@ async function fetchOwner(owner) {
   }));
 }
 
-async function load() {
-  try {
+async function load(force) {
+  if (!force) try {
     const c = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
     if (c && Date.now() - c.at < CACHE_TTL) return { items: c.items };
   } catch (e) {}
@@ -175,12 +179,18 @@ function render() {
   }).join("");
 }
 
-load().then(({ items, stale }) => {
-  const hidden = HIDDEN.map((h) => h.toLowerCase());
-  ITEMS = items.filter((r) => !hidden.includes(r.name.toLowerCase())).concat(EXTRA);
-  STALE = !!stale;
-  render();
-});
+function refresh(force) {
+  const b = $("refresh");
+  b.disabled = true;
+  return load(force).then(({ items, stale }) => {
+    const hidden = HIDDEN.map((h) => h.toLowerCase());
+    ITEMS = items.filter((r) => !hidden.includes(r.name.toLowerCase())).concat(EXTRA);
+    STALE = !!stale;
+    render();
+  }).finally(() => { b.disabled = false; });
+}
+refresh(new URLSearchParams(location.search).has("refresh"));
+$("refresh").addEventListener("click", () => refresh(true));
 $("q").addEventListener("input", render);
 $("sort").addEventListener("change", render);
 </script>

@@ -13,4 +13,5 @@ il n'y a rien à mettre à jour.
 - `EXTRA` : liens ajoutés à la main (sites hors GitHub, etc.).
 - `FALLBACK` : liste de secours affichée si l'API GitHub ne répond pas.
 
-Les résultats sont mis en cache 1 h dans le navigateur.
+Les résultats sont mis en cache 1 h dans le navigateur. Le bouton « ↻ Actualiser »
+(ou l'adresse `https://oliviercalmels.github.io/?refresh`) force le rechargement depuis GitHub.
